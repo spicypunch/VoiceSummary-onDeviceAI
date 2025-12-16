@@ -1,4 +1,4 @@
-package kr.jm.voicesummary.audio
+package kr.jm.voicesummary.core.audio
 
 import android.Manifest
 import android.content.Context

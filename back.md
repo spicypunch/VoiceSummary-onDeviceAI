@@ -4,77 +4,117 @@
 - 패키지: `kr.jm.voicesummary`
 - 목표: 온디바이스 AI 녹음기 앱 (오프라인 STT + 요약)
 - 핵심 가치: "서버 전송 0바이트" - 보안/프라이버시 강조
-- 타겟 기기: Nothing Phone 3a (Snapdragon 7s Gen 3)
+- 타겟 기기: 모든 안드로이드 폰
 - 기술 스택: Android Native (Kotlin) + Jetpack Compose
-
-## 기술 선정 배경
-
-### STT (음성→텍스트)
-- 선택: **Whisper.cpp** (OpenAI Whisper의 C++ 포팅)
-- 모델: Base 또는 Small (Tiny는 한국어 성능 부족)
-- 이유: 오프라인 완벽 지원, 한국어 인식률 우수, 크로스플랫폼(iOS 확장 용이)
-
-### LLM (텍스트 요약)
-- 선택: **MediaPipe LLM Inference** + Gemma 2B (4bit 양자화)
-- 이유: 구글 공식 도구, Android/iOS 모두 지원, NPU 가속 자동 처리
-
-### 크로스플랫폼 전략
-- Flutter 대신 **KMP (Kotlin Multiplatform)** 추천
-- 이유: 백그라운드 녹음 안정성, AI 네이티브 연동 용이
 
 ## 개발 로드맵
 
 1. ✅ 녹음 기능 - 완료
-2. ⏳ Whisper STT 연동 - 진행 예정
-3. ⬚ MediaPipe LLM 요약
-4. ⬚ 백그라운드 서비스
-5. ⬚ Room DB + UI 완성
+2. ✅ Whisper STT 연동 - 완료
+3. ✅ Room DB + UI - 완료
+4. ✅ Clean Architecture + MVVM 리팩토링 - 완료
+5. ✅ Foreground Service (백그라운드 처리) - 완료
+6. ⏳ MediaPipe LLM 요약 - 코드 완료, 모델 파일 필요
+
+---
 
 ## 완료된 작업
 
-### 1단계: 녹음 기능 (완료)
+### 1단계: 녹음 기능
 
-**구현 파일:**
-- `app/src/main/AndroidManifest.xml` - RECORD_AUDIO 권한 추가
-- `app/src/main/java/kr/jm/voicesummary/audio/AudioRecorder.kt` - WAV 녹음 클래스
-- `app/src/main/java/kr/jm/voicesummary/ui/RecordingScreen.kt` - 녹음 UI
-- `app/src/main/java/kr/jm/voicesummary/MainActivity.kt` - 권한 처리 + 녹음 연결
+- WAV 포맷 (16kHz, Mono, 16bit)
+- 저장 경로: `/Android/data/kr.jm.voicesummary/files/`
 
-**녹음 설정:**
-- 포맷: WAV (PCM)
-- 샘플레이트: 16kHz (Whisper 권장)
-- 채널: Mono
-- 비트: 16bit
+### 2단계: Whisper STT 연동
 
-**저장 경로:**
-- `/storage/emulated/0/Android/data/kr.jm.voicesummary/files/`
-- 파일명: `yyyyMMdd_HHmmss.wav`
+- whisper.cpp NDK 직접 통합
+- 모델: ggml-base.bin (142MB, assets 내장)
+- 한국어 인식 지원
+- 긴 오디오 청크 처리 (5분 단위) - OOM 방지
 
-## 다음 작업: 2단계 Whisper STT 연동
+### 3단계: Room DB + Expandable UI
 
-**선택지:**
-- A. whisper.cpp 직접 통합 (NDK + CMake) - 성능 최고, 세팅 복잡
-- B. 커뮤니티 래퍼 라이브러리 사용 - 세팅 쉬움
+- Recording 엔티티 (filePath, fileName, createdAt, fileSize, transcription, summary)
+- 녹음 목록에서 펼치기/닫기로 STT 결과 표시
+- Long click으로 삭제 다이얼로그
 
-**필요한 것:**
-- Whisper 모델 파일 (.bin) - ggml-base.bin 또는 ggml-small-q5_0.bin
-- JNI 바인딩 또는 래퍼 라이브러리
+### 4단계: Clean Architecture + MVVM 리팩토링
 
-## 참고 정보
+폴더 구조:
+- `domain/` - model, repository interface
+- `data/` - local (Room DB), repository impl
+- `presentation/` - recording, list (Screen + ViewModel + UiState)
+- `core/` - audio (AudioRecorder, AudioPlayer), whisper, llm
+- `service/` - RecordingService (Foreground Service)
 
-### 온디바이스 AI 핵심 개념
-- **NPU**: AI 연산 전용 저전력 칩. CPU/GPU보다 효율적
-- **양자화(Quantization)**: 모델 용량 압축 기술. Float32 → Int8/Int4로 변환
-- **Op(Operator)**: 연산 명령어. NPU가 지원 안 하면 CPU로 폴백되어 느려짐
+수동 DI:
+- VoiceSummaryApp에서 의존성 생성
+- ViewModel Factory 패턴으로 주입
 
-### Qualcomm AI Hub
-- 퀄컴이 Whisper, Gemma 등을 스냅드래곤 NPU에 최적화해둔 모델 저장소
-- Nothing Phone 3a (Snapdragon 7s Gen 3)에서 NPU 가속 가능
-- 단, 전용 SDK 쓰면 다른 칩셋(엑시노스, 미디어텍)에서 안 돌아감
-- 범용성 위해 표준 라이브러리(TFLite, MediaPipe) 사용 권장
+Stateless UI:
+- Screen은 UiState만 받아서 렌더링
+- ViewModel이 모든 상태 관리
 
-### 용어 정리
-- **ONNX**: MS+Meta가 만든 AI 모델 범용 포맷 (어디서든 실행 가능)
-- **TFLite/LiteRT**: 구글의 모바일 AI 런타임
-- **whisper.cpp**: Whisper를 C++로 포팅한 경량 버전
-- **MediaPipe**: 구글의 크로스플랫폼 AI 파이프라인 도구
+### 5단계: Foreground Service (백그라운드 처리)
+
+RecordingService 구현:
+- 녹음, STT, 요약 모두 백그라운드에서 처리
+- 알림바 상태 표시: "녹음 중...", "텍스트 변환 중...", "AI 요약 중..."
+- 화면 꺼져도 작업 계속됨
+- 작업 완료 시 자동 서비스 종료
+
+권한:
+- FOREGROUND_SERVICE
+- FOREGROUND_SERVICE_MICROPHONE
+- POST_NOTIFICATIONS (Android 13+)
+
+### 6단계: MediaPipe LLM 요약 (코드 완료)
+
+- MediaPipe tasks-genai 라이브러리 추가
+- LlmSummarizer 구현 (core/llm/)
+- 요약 버튼 (✨ 아이콘) - STT 완료 후 활성화
+- 모델: gemma-2b-it-gpu-int4.bin (약 1.5GB) - Kaggle에서 다운로드 필요
+
+---
+
+## 해결한 이슈
+
+### JNI 패키지명 불일치
+- 원인: WhisperLib.kt를 core/whisper/로 이동 후 JNI 함수명 불일치
+- 해결: whisper_jni.cpp의 함수명을 `Java_kr_jm_voicesummary_core_whisper_*`로 변경
+
+### OOM (Out of Memory)
+- 원인: 긴 WAV 파일 전체를 메모리에 로드
+- 해결: 5분 단위 청크로 나눠서 처리, RandomAccessFile로 필요한 부분만 읽기
+
+### 백그라운드 녹음 끊김
+- 원인: Activity 생명주기에 종속된 AudioRecorder
+- 해결: Foreground Service로 녹음 처리
+
+---
+
+## 남은 작업
+
+1. LLM 모델 파일 다운로드 및 테스트
+   - Kaggle에서 gemma-2b-it-gpu-int4 다운로드
+   - assets에 추가 또는 다운로드 기능 구현
+
+2. 배포 시 모델 용량 문제
+   - Whisper: 142MB (assets 내장 가능)
+   - Gemma: 1.5GB (APK 크기 제한 초과)
+   - 옵션: 앱 내장 (1.6GB 앱) 또는 선택적 다운로드
+
+---
+
+## 기술 참고
+
+### 모델 파일 위치
+- Whisper: `app/src/main/assets/ggml-base.bin`
+- Gemma: `app/src/main/assets/gemma-2b-it-gpu-int4.bin` (추가 필요)
+
+### 주요 파일
+- `VoiceSummaryApp.kt` - 수동 DI
+- `RecordingService.kt` - Foreground Service
+- `WhisperTranscriber.kt` - STT 처리 (청크 단위)
+- `LlmSummarizer.kt` - LLM 요약
+- `whisper_jni.cpp` - JNI 바인딩
