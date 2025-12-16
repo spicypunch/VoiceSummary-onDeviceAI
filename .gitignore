@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.idea/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -13,3 +14,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# AI 모델 파일 (100MB 초과)
+app/src/main/assets/*.bin

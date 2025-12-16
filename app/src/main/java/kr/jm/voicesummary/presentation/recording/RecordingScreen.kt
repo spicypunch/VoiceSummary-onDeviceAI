@@ -1,22 +1,31 @@
-package kr.jm.voicesummary.ui
+package kr.jm.voicesummary.presentation.recording
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kr.jm.voicesummary.audio.RecordingState
+import kr.jm.voicesummary.core.audio.RecordingState
 
 @Composable
 fun RecordingScreen(
-    recordingState: RecordingState,
-    recordingDuration: Long,
-    onStartRecording: () -> Unit,
-    onStopRecording: () -> Unit,
+    uiState: RecordingUiState,
+    hasPermission: Boolean,
+    onRecordClick: () -> Unit,
+    onRequestPermission: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -26,11 +35,10 @@ fun RecordingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 녹음 시간 표시
         Text(
-            text = formatDuration(recordingDuration),
+            text = formatDuration(uiState.recordingDuration),
             fontSize = 48.sp,
-            color = if (recordingState == RecordingState.RECORDING) {
+            color = if (uiState.recordingState == RecordingState.RECORDING) {
                 MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.onSurface
@@ -39,19 +47,22 @@ fun RecordingScreen(
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        // 녹음 버튼
         Button(
             onClick = {
-                if (recordingState == RecordingState.RECORDING) {
-                    onStopRecording()
+                if (uiState.recordingState == RecordingState.RECORDING) {
+                    onRecordClick()
                 } else {
-                    onStartRecording()
+                    if (hasPermission) {
+                        onRecordClick()
+                    } else {
+                        onRequestPermission()
+                    }
                 }
             },
             modifier = Modifier.size(120.dp),
             shape = CircleShape,
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (recordingState == RecordingState.RECORDING) {
+                containerColor = if (uiState.recordingState == RecordingState.RECORDING) {
                     Color.Red
                 } else {
                     MaterialTheme.colorScheme.primary
@@ -59,16 +70,15 @@ fun RecordingScreen(
             )
         ) {
             Text(
-                text = if (recordingState == RecordingState.RECORDING) "중지" else "녹음",
+                text = if (uiState.recordingState == RecordingState.RECORDING) "중지" else "녹음",
                 fontSize = 20.sp
             )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 상태 텍스트
         Text(
-            text = when (recordingState) {
+            text = when (uiState.recordingState) {
                 RecordingState.IDLE -> "버튼을 눌러 녹음을 시작하세요"
                 RecordingState.RECORDING -> "녹음 중..."
                 RecordingState.ERROR -> "오류가 발생했습니다"
