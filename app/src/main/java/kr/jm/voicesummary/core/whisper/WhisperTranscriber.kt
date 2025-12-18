@@ -17,7 +17,7 @@ class WhisperTranscriber(private val context: Context) {
         private const val TAG = "WhisperTranscriber"
         private const val MODEL_NAME = "ggml-base.bin"
         private const val SAMPLE_RATE = 16000
-        private const val CHUNK_DURATION_SEC = 300 // 5분씩 처리
+        private const val CHUNK_DURATION_SEC = 30 // 30초씩 처리 (진행률 자주 업데이트)
         private const val SAMPLES_PER_CHUNK = SAMPLE_RATE * CHUNK_DURATION_SEC
     }
 

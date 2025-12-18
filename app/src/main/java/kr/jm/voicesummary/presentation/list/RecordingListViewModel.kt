@@ -60,17 +60,23 @@ class RecordingListViewModel(
         }
         viewModelScope.launch {
             whisperTranscriber.state.collect { state ->
-                val isTranscribing = state == kr.jm.voicesummary.core.whisper.TranscriberState.TRANSCRIBING
-                if (!isTranscribing && _uiState.value.transcribingFilePath != null) {
-                    _uiState.update { it.copy(transcribingFilePath = null) }
+                when (state) {
+                    kr.jm.voicesummary.core.whisper.TranscriberState.READY,
+                    kr.jm.voicesummary.core.whisper.TranscriberState.ERROR -> {
+                        _uiState.update { it.copy(transcribingFilePath = null) }
+                    }
+                    else -> { /* LOADING, TRANSCRIBING 등은 유지 */ }
                 }
             }
         }
         viewModelScope.launch {
             llmSummarizer.state.collect { state ->
-                val isSummarizing = state == kr.jm.voicesummary.core.llm.LlmState.SUMMARIZING
-                if (!isSummarizing && _uiState.value.summarizingFilePath != null) {
-                    _uiState.update { it.copy(summarizingFilePath = null) }
+                when (state) {
+                    kr.jm.voicesummary.core.llm.LlmState.READY,
+                    kr.jm.voicesummary.core.llm.LlmState.ERROR -> {
+                        _uiState.update { it.copy(summarizingFilePath = null) }
+                    }
+                    else -> { /* LOADING, SUMMARIZING 등은 유지 */ }
                 }
             }
         }
