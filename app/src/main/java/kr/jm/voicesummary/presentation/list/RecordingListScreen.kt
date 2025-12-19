@@ -6,6 +6,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -29,12 +31,14 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Transcribe
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -48,6 +52,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kr.jm.voicesummary.core.audio.PlaybackState
+import kr.jm.voicesummary.core.stt.DownloadState
+import kr.jm.voicesummary.core.stt.SttModel
 import kr.jm.voicesummary.domain.model.Recording
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -63,6 +69,10 @@ fun RecordingListScreen(
     onExpandToggle: (String) -> Unit,
     onDeleteConfirm: () -> Unit,
     onDeleteCancel: () -> Unit,
+    onDownloadSttModel: (SttModel) -> Unit,
+    onShowModelSelector: () -> Unit,
+    onDismissModelSelector: () -> Unit,
+    onSelectModel: (SttModel) -> Unit,
     modifier: Modifier = Modifier
 ) {
     uiState.deleteTarget?.let { recording ->
@@ -83,46 +93,267 @@ fun RecordingListScreen(
         )
     }
 
-    if (uiState.recordings.isEmpty()) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "녹음 파일이 없습니다",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    } else {
-        LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(uiState.recordings, key = { it.filePath }) { recording ->
-                RecordingItem(
-                    recording = recording,
-                    isPlaying = uiState.currentPlayingFilePath == recording.filePath &&
-                            uiState.playbackState == PlaybackState.PLAYING,
-                    isSelected = uiState.currentPlayingFilePath == recording.filePath,
-                    currentPosition = if (uiState.currentPlayingFilePath == recording.filePath)
-                        uiState.currentPosition else 0,
-                    duration = if (uiState.currentPlayingFilePath == recording.filePath)
-                        uiState.duration else 0,
-                    isExpanded = recording.filePath in uiState.expandedItems,
-                    isTranscribing = uiState.transcribingFilePath == recording.filePath,
-                    isSummarizing = uiState.summarizingFilePath == recording.filePath,
-                    isLlmAvailable = uiState.isLlmAvailable,
-                    onPlayClick = { onPlayClick(recording) },
-                    onLongClick = { onLongClick(recording) },
-                    onSeek = onSeek,
-                    onTranscribeClick = { onTranscribeClick(recording) },
-                    onSummarizeClick = { onSummarizeClick(recording) },
-                    onExpandToggle = { onExpandToggle(recording.filePath) }
+    if (uiState.showModelSelector) {
+        ModelSelectorDialog(
+            selectedModel = uiState.selectedSttModel,
+            downloadedModels = uiState.downloadedModels,
+            onSelectModel = { model ->
+                onSelectModel(model)
+                onDismissModelSelector()
+            },
+            onDismiss = onDismissModelSelector
+        )
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // STT 모델 다운로드 배너
+        SttModelBanner(
+            selectedModel = uiState.selectedSttModel,
+            isModelDownloaded = uiState.isSttModelDownloaded,
+            downloadState = uiState.sttDownloadState,
+            onDownloadClick = { onDownloadSttModel(uiState.selectedSttModel) },
+            onChangeModelClick = onShowModelSelector
+        )
+
+            if (uiState.recordings.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "녹음 파일이 없습니다",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(uiState.recordings, key = { it.filePath }) { recording ->
+                    RecordingItem(
+                        recording = recording,
+                        isPlaying = uiState.currentPlayingFilePath == recording.filePath &&
+                                uiState.playbackState == PlaybackState.PLAYING,
+                        isSelected = uiState.currentPlayingFilePath == recording.filePath,
+                        currentPosition = if (uiState.currentPlayingFilePath == recording.filePath)
+                            uiState.currentPosition else 0,
+                        duration = if (uiState.currentPlayingFilePath == recording.filePath)
+                            uiState.duration else 0,
+                        isExpanded = recording.filePath in uiState.expandedItems,
+                        isTranscribing = uiState.transcribingFilePath == recording.filePath,
+                        isSummarizing = uiState.summarizingFilePath == recording.filePath,
+                        isLlmAvailable = uiState.isLlmAvailable,
+                        isSttAvailable = uiState.isSttModelDownloaded,
+                        onPlayClick = { onPlayClick(recording) },
+                        onLongClick = { onLongClick(recording) },
+                        onSeek = onSeek,
+                        onTranscribeClick = { onTranscribeClick(recording) },
+                        onSummarizeClick = { onSummarizeClick(recording) },
+                        onExpandToggle = { onExpandToggle(recording.filePath) }
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun SttModelBanner(
+    selectedModel: SttModel,
+    isModelDownloaded: Boolean,
+    downloadState: DownloadState,
+    onDownloadClick: () -> Unit,
+    onChangeModelClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isModelDownloaded) {
+                MaterialTheme.colorScheme.surfaceVariant
+            } else {
+                MaterialTheme.colorScheme.primaryContainer
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "STT 모델: ${selectedModel.displayName}",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = "${selectedModel.description} (${selectedModel.sizeDescription})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                TextButton(onClick = onChangeModelClick) {
+                    Text("변경")
+                }
+            }
+            
+            if (!isModelDownloaded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                when (downloadState) {
+                    is DownloadState.Idle -> {
+                        Button(onClick = onDownloadClick) {
+                            Text("다운로드")
+                        }
+                    }
+                    is DownloadState.Downloading -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (downloadState.progress >= 0) {
+                                LinearProgressIndicator(
+                                    progress = { downloadState.progress / 100f },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${downloadState.progress}%",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            } else {
+                                LinearProgressIndicator(modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "다운로드 중...",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                    is DownloadState.Extracting -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "압축 해제 중...",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    is DownloadState.Completed -> {
+                        Text(
+                            text = "✓ 다운로드 완료",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    is DownloadState.Error -> {
+                        Column {
+                            Text(
+                                text = "다운로드 실패: ${downloadState.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(onClick = onDownloadClick) {
+                                Text("다시 시도")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ModelSelectorDialog(
+    selectedModel: SttModel,
+    downloadedModels: Set<SttModel>,
+    onSelectModel: (SttModel) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("STT 모델 선택") },
+        text = {
+            Column {
+                SttModel.entries.forEach { model ->
+                    val isDownloaded = model in downloadedModels
+                    val isSelected = model == selectedModel
+                    
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .combinedClickable(
+                                onClick = { onSelectModel(model) }
+                            ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            }
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = model.displayName,
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (isDownloaded) {
+                                        Text(
+                                            text = "✓ 다운됨",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    Text(
+                                        text = model.sizeDescription,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = model.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("닫기")
+            }
+        }
+    )
 }
 
 
@@ -138,6 +369,7 @@ private fun RecordingItem(
     isTranscribing: Boolean,
     isSummarizing: Boolean,
     isLlmAvailable: Boolean,
+    isSttAvailable: Boolean,
     onPlayClick: () -> Unit,
     onLongClick: () -> Unit,
     onSeek: (Int) -> Unit,
@@ -195,7 +427,7 @@ private fun RecordingItem(
                     }
                     IconButton(
                         onClick = onTranscribeClick,
-                        enabled = !isTranscribing
+                        enabled = !isTranscribing && isSttAvailable
                     ) {
                         if (isTranscribing) {
                             CircularProgressIndicator(
@@ -206,7 +438,9 @@ private fun RecordingItem(
                             Icon(
                                 imageVector = Icons.Default.Transcribe,
                                 contentDescription = "음성 인식",
-                                tint = if (hasTranscription) {
+                                tint = if (!isSttAvailable) {
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                } else if (hasTranscription) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
                                     MaterialTheme.colorScheme.secondary

@@ -12,7 +12,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kr.jm.voicesummary.core.audio.AudioPlayer
 import kr.jm.voicesummary.core.llm.LlmSummarizer
-import kr.jm.voicesummary.core.whisper.WhisperTranscriber
+import kr.jm.voicesummary.core.stt.DownloadState
+import kr.jm.voicesummary.core.stt.SherpaModelDownloader
+import kr.jm.voicesummary.core.stt.SherpaTranscriber
+import kr.jm.voicesummary.core.stt.SttModel
 import kr.jm.voicesummary.domain.model.Recording
 import kr.jm.voicesummary.domain.repository.RecordingRepository
 import kr.jm.voicesummary.service.RecordingService
@@ -21,7 +24,8 @@ import java.io.File
 class RecordingListViewModel(
     private val repository: RecordingRepository,
     private val audioPlayer: AudioPlayer,
-    private val whisperTranscriber: WhisperTranscriber,
+    private val sttTranscriber: SherpaTranscriber,
+    private val sttModelDownloader: SherpaModelDownloader,
     private val llmSummarizer: LlmSummarizer,
     private val context: Context
 ) : ViewModel() {
@@ -59,13 +63,42 @@ class RecordingListViewModel(
             }
         }
         viewModelScope.launch {
-            whisperTranscriber.state.collect { state ->
+            sttTranscriber.state.collect { state ->
                 when (state) {
-                    kr.jm.voicesummary.core.whisper.TranscriberState.READY,
-                    kr.jm.voicesummary.core.whisper.TranscriberState.ERROR -> {
+                    kr.jm.voicesummary.core.stt.SttState.READY,
+                    kr.jm.voicesummary.core.stt.SttState.ERROR -> {
                         _uiState.update { it.copy(transcribingFilePath = null) }
                     }
                     else -> { /* LOADING, TRANSCRIBING 등은 유지 */ }
+                }
+            }
+        }
+        viewModelScope.launch {
+            sttModelDownloader.downloadState.collect { state ->
+                _uiState.update { 
+                    it.copy(
+                        sttDownloadState = state,
+                        isSttModelDownloaded = state is DownloadState.Completed || sttModelDownloader.isCurrentModelDownloaded(),
+                        downloadedModels = sttModelDownloader.getDownloadedModels().toSet()
+                    )
+                }
+            }
+        }
+        _uiState.update { 
+            it.copy(
+                isSttModelDownloaded = sttModelDownloader.isCurrentModelDownloaded(),
+                selectedSttModel = sttModelDownloader.getSelectedModel(),
+                downloadedModels = sttModelDownloader.getDownloadedModels().toSet()
+            )
+        }
+        viewModelScope.launch {
+            sttModelDownloader.selectedModel.collect { model ->
+                _uiState.update { 
+                    it.copy(
+                        selectedSttModel = model,
+                        isSttModelDownloaded = sttModelDownloader.isModelDownloaded(model),
+                        downloadedModels = sttModelDownloader.getDownloadedModels().toSet()
+                    )
                 }
             }
         }
@@ -110,6 +143,7 @@ class RecordingListViewModel(
 
     fun onTranscribeClick(recording: Recording) {
         if (_uiState.value.transcribingFilePath != null) return
+        if (!_uiState.value.isSttModelDownloaded) return
 
         _uiState.update { it.copy(transcribingFilePath = recording.filePath) }
         val intent = Intent(context, RecordingService::class.java).apply {
@@ -117,6 +151,36 @@ class RecordingListViewModel(
             putExtra(RecordingService.EXTRA_FILE_PATH, recording.filePath)
         }
         context.startForegroundService(intent)
+    }
+
+    fun onDownloadSttModel(model: SttModel) {
+        viewModelScope.launch {
+            sttModelDownloader.downloadModel(model)
+            if (sttModelDownloader.isModelDownloaded(model)) {
+                sttTranscriber.release()
+            }
+        }
+    }
+
+    fun onShowModelSelector() {
+        _uiState.update { it.copy(showModelSelector = true) }
+    }
+
+    fun onDismissModelSelector() {
+        _uiState.update { it.copy(showModelSelector = false) }
+    }
+
+    fun onSelectModel(model: SttModel) {
+        sttModelDownloader.setSelectedModel(model)
+        _uiState.update { 
+            it.copy(
+                showModelSelector = false,
+                selectedSttModel = model,
+                isSttModelDownloaded = sttModelDownloader.isModelDownloaded(model)
+            )
+        }
+        // 모델 변경 시 transcriber 재초기화 필요
+        sttTranscriber.release()
     }
 
     fun onSummarizeClick(recording: Recording) {
@@ -145,13 +209,14 @@ class RecordingListViewModel(
     class Factory(
         private val repository: RecordingRepository,
         private val audioPlayer: AudioPlayer,
-        private val whisperTranscriber: WhisperTranscriber,
+        private val sttTranscriber: SherpaTranscriber,
+        private val sttModelDownloader: SherpaModelDownloader,
         private val llmSummarizer: LlmSummarizer,
         private val context: Context
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return RecordingListViewModel(repository, audioPlayer, whisperTranscriber, llmSummarizer, context) as T
+            return RecordingListViewModel(repository, audioPlayer, sttTranscriber, sttModelDownloader, llmSummarizer, context) as T
         }
     }
 }
