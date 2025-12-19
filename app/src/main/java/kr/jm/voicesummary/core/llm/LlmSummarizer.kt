@@ -9,14 +9,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class LlmSummarizer(private val context: Context) {
+class LlmSummarizer(
+    private val context: Context,
+    private val modelDownloader: LlmModelDownloader
+) {
 
     companion object {
         private const val TAG = "LlmSummarizer"
-        private const val MODEL_NAME = "gemma-2b-it-gpu-int4.bin"
     }
 
     private var llmInference: LlmInference? = null
+    private var loadedModel: LlmModel? = null
 
     private val _state = MutableStateFlow(LlmState.NOT_INITIALIZED)
     val state: StateFlow<LlmState> = _state
@@ -25,29 +28,31 @@ class LlmSummarizer(private val context: Context) {
     val progress: StateFlow<String> = _progress
 
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
-        if (llmInference != null) {
+        val selectedModel = modelDownloader.getSelectedModel()
+
+        // 이미 같은 모델이 로드되어 있으면 스킵
+        if (llmInference != null && loadedModel == selectedModel) {
             return@withContext true
+        }
+
+        // 다른 모델이면 기존 것 해제
+        if (llmInference != null) {
+            llmInference?.close()
+            llmInference = null
         }
 
         _state.value = LlmState.LOADING
         _progress.value = "LLM 모델 로딩 중..."
 
-        val modelFile = getModelFile()
-
-        // assets에서 모델 복사 (최초 1회)
-        if (!modelFile.exists()) {
-            _progress.value = "AI 요약 엔진 준비 중..."
-            try {
-                copyModelFromAssets(modelFile)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to copy model from assets", e)
-                _state.value = LlmState.MODEL_NOT_FOUND
-                _progress.value = "모델 파일이 없습니다"
-                return@withContext false
-            }
+        if (!modelDownloader.isModelDownloaded(selectedModel)) {
+            _state.value = LlmState.MODEL_NOT_FOUND
+            _progress.value = "모델 파일이 없습니다. 다운로드가 필요합니다."
+            return@withContext false
         }
 
         try {
+            val modelFile = modelDownloader.getModelFile(selectedModel)
+
             val options = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(modelFile.absolutePath)
                 .setMaxTokens(1024)
@@ -57,10 +62,11 @@ class LlmSummarizer(private val context: Context) {
                 .build()
 
             llmInference = LlmInference.createFromOptions(context, options)
+            loadedModel = selectedModel
 
             _state.value = LlmState.READY
             _progress.value = "준비 완료"
-            Log.i(TAG, "LLM initialized successfully")
+            Log.i(TAG, "LLM initialized with ${selectedModel.name}")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize LLM", e)
@@ -112,37 +118,10 @@ $text
         return response.trim()
     }
 
-    private fun copyModelFromAssets(destFile: File) {
-        destFile.parentFile?.mkdirs()
-        context.assets.open(MODEL_NAME).use { input ->
-            destFile.outputStream().use { output ->
-                input.copyTo(output)
-            }
-        }
-        Log.i(TAG, "Model copied to: ${destFile.absolutePath}")
-    }
-
-    fun getModelFile(): File {
-        val modelsDir = File(context.filesDir, "models")
-        if (!modelsDir.exists()) {
-            modelsDir.mkdirs()
-        }
-        return File(modelsDir, MODEL_NAME)
-    }
-
-    fun isModelDownloaded(): Boolean {
-        // assets에 있으면 항상 사용 가능
-        return try {
-            context.assets.open(MODEL_NAME).close()
-            true
-        } catch (e: Exception) {
-            getModelFile().exists()
-        }
-    }
-
     fun release() {
         llmInference?.close()
         llmInference = null
+        loadedModel = null
         _state.value = LlmState.NOT_INITIALIZED
     }
 }

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.room.Room
 import kr.jm.voicesummary.core.audio.AudioPlayer
 import kr.jm.voicesummary.core.audio.AudioRecorder
+import kr.jm.voicesummary.core.llm.LlmModelDownloader
 import kr.jm.voicesummary.core.llm.LlmSummarizer
 import kr.jm.voicesummary.core.stt.SherpaModelDownloader
 import kr.jm.voicesummary.core.stt.SherpaTranscriber
@@ -34,6 +35,9 @@ class VoiceSummaryApp : Application() {
     lateinit var llmSummarizer: LlmSummarizer
         private set
 
+    lateinit var llmModelDownloader: LlmModelDownloader
+        private set
+
     override fun onCreate() {
         super.onCreate()
 
@@ -52,6 +56,7 @@ class VoiceSummaryApp : Application() {
         audioPlayer = AudioPlayer()
         sttModelDownloader = SherpaModelDownloader(this)
         sttTranscriber = SherpaTranscriber(this, sttModelDownloader)
-        llmSummarizer = LlmSummarizer(this)
+        llmModelDownloader = LlmModelDownloader(this)
+        llmSummarizer = LlmSummarizer(this, llmModelDownloader)
     }
 }

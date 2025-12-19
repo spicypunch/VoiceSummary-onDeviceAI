@@ -52,6 +52,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kr.jm.voicesummary.core.audio.PlaybackState
+import kr.jm.voicesummary.core.llm.LlmDownloadState
+import kr.jm.voicesummary.core.llm.LlmModel
 import kr.jm.voicesummary.core.stt.DownloadState
 import kr.jm.voicesummary.core.stt.SttModel
 import kr.jm.voicesummary.domain.model.Recording
@@ -70,9 +72,10 @@ fun RecordingListScreen(
     onDeleteConfirm: () -> Unit,
     onDeleteCancel: () -> Unit,
     onDownloadSttModel: (SttModel) -> Unit,
-    onShowModelSelector: () -> Unit,
-    onDismissModelSelector: () -> Unit,
-    onSelectModel: (SttModel) -> Unit,
+    onShowSttModelSelector: () -> Unit,
+    onDismissSttModelSelector: () -> Unit,
+    onSelectSttModel: (SttModel) -> Unit,
+    onDownloadLlmModel: (LlmModel) -> Unit,
     modifier: Modifier = Modifier
 ) {
     uiState.deleteTarget?.let { recording ->
@@ -93,15 +96,15 @@ fun RecordingListScreen(
         )
     }
 
-    if (uiState.showModelSelector) {
-        ModelSelectorDialog(
+    if (uiState.showSttModelSelector) {
+        SttModelSelectorDialog(
             selectedModel = uiState.selectedSttModel,
-            downloadedModels = uiState.downloadedModels,
+            downloadedModels = uiState.downloadedSttModels,
             onSelectModel = { model ->
-                onSelectModel(model)
-                onDismissModelSelector()
+                onSelectSttModel(model)
+                onDismissSttModelSelector()
             },
-            onDismiss = onDismissModelSelector
+            onDismiss = onDismissSttModelSelector
         )
     }
 
@@ -112,7 +115,14 @@ fun RecordingListScreen(
             isModelDownloaded = uiState.isSttModelDownloaded,
             downloadState = uiState.sttDownloadState,
             onDownloadClick = { onDownloadSttModel(uiState.selectedSttModel) },
-            onChangeModelClick = onShowModelSelector
+            onChangeModelClick = onShowSttModelSelector
+        )
+
+        // LLM 모델 다운로드 배너
+        LlmModelBanner(
+            isModelDownloaded = uiState.isLlmModelDownloaded,
+            downloadState = uiState.llmDownloadState,
+            onDownloadClick = { onDownloadLlmModel(uiState.selectedLlmModel) }
         )
 
             if (uiState.recordings.isEmpty()) {
@@ -148,7 +158,7 @@ fun RecordingListScreen(
                         isExpanded = recording.filePath in uiState.expandedItems,
                         isTranscribing = uiState.transcribingFilePath == recording.filePath,
                         isSummarizing = uiState.summarizingFilePath == recording.filePath,
-                        isLlmAvailable = uiState.isLlmAvailable,
+                        isLlmAvailable = uiState.isLlmModelDownloaded,
                         isSttAvailable = uiState.isSttModelDownloaded,
                         onPlayClick = { onPlayClick(recording) },
                         onLongClick = { onLongClick(recording) },
@@ -282,7 +292,7 @@ private fun SttModelBanner(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ModelSelectorDialog(
+private fun SttModelSelectorDialog(
     selectedModel: SttModel,
     downloadedModels: Set<SttModel>,
     onSelectModel: (SttModel) -> Unit,
@@ -325,7 +335,7 @@ private fun ModelSelectorDialog(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     if (isDownloaded) {
                                         Text(
-                                            text = "✓ 다운됨",
+                                            text = "다운됨",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -356,6 +366,97 @@ private fun ModelSelectorDialog(
     )
 }
 
+@Composable
+private fun LlmModelBanner(
+    isModelDownloaded: Boolean,
+    downloadState: LlmDownloadState,
+    onDownloadClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isModelDownloaded) {
+                MaterialTheme.colorScheme.surfaceVariant
+            } else {
+                MaterialTheme.colorScheme.tertiaryContainer
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "AI 요약 모델 (Gemma 2B)",
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = if (isModelDownloaded) "준비 완료" else "GPU 가속, 약 1.35GB",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            
+            if (!isModelDownloaded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                when (downloadState) {
+                    is LlmDownloadState.Idle -> {
+                        Button(onClick = onDownloadClick) {
+                            Text("다운로드")
+                        }
+                    }
+                    is LlmDownloadState.Downloading -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (downloadState.progress >= 0) {
+                                LinearProgressIndicator(
+                                    progress = { downloadState.progress / 100f },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${downloadState.progress}%",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            } else {
+                                LinearProgressIndicator(modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "다운로드 중...",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                    is LlmDownloadState.Completed -> {
+                        Text(
+                            text = "다운로드 완료",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    is LlmDownloadState.Error -> {
+                        Column {
+                            Text(
+                                text = "다운로드 실패: ${downloadState.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(onClick = onDownloadClick) {
+                                Text("다시 시도")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

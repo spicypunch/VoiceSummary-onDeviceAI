@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
                 app.sttTranscriber,
                 app.sttModelDownloader,
                 app.llmSummarizer,
+                app.llmModelDownloader,
                 this
             )
         )[RecordingListViewModel::class.java]
@@ -127,9 +128,10 @@ class MainActivity : ComponentActivity() {
                             onDeleteConfirm = { listViewModel.onDeleteConfirm() },
                             onDeleteCancel = { listViewModel.onDeleteCancel() },
                             onDownloadSttModel = { listViewModel.onDownloadSttModel(it) },
-                            onShowModelSelector = { listViewModel.onShowModelSelector() },
-                            onDismissModelSelector = { listViewModel.onDismissModelSelector() },
-                            onSelectModel = { listViewModel.onSelectModel(it) },
+                            onShowSttModelSelector = { listViewModel.onShowSttModelSelector() },
+                            onDismissSttModelSelector = { listViewModel.onDismissSttModelSelector() },
+                            onSelectSttModel = { listViewModel.onSelectSttModel(it) },
+                            onDownloadLlmModel = { listViewModel.onDownloadLlmModel(it) },
                             modifier = Modifier.padding(innerPadding)
                         )
                     }

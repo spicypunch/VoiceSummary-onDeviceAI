@@ -23,6 +23,10 @@ import kr.jm.voicesummary.MainActivity
 import kr.jm.voicesummary.R
 import kr.jm.voicesummary.VoiceSummaryApp
 import kr.jm.voicesummary.core.audio.RecordingState
+import kr.jm.voicesummary.core.llm.LlmDownloadState
+import kr.jm.voicesummary.core.llm.LlmModel
+import kr.jm.voicesummary.core.stt.DownloadState
+import kr.jm.voicesummary.core.stt.SttModel
 import kr.jm.voicesummary.domain.model.Recording
 import java.io.File
 import java.text.SimpleDateFormat
@@ -38,7 +42,10 @@ class RecordingService : Service() {
         const val ACTION_STOP_RECORDING = "STOP_RECORDING"
         const val ACTION_TRANSCRIBE = "TRANSCRIBE"
         const val ACTION_SUMMARIZE = "SUMMARIZE"
+        const val ACTION_DOWNLOAD_STT_MODEL = "DOWNLOAD_STT_MODEL"
+        const val ACTION_DOWNLOAD_LLM_MODEL = "DOWNLOAD_LLM_MODEL"
         const val EXTRA_FILE_PATH = "file_path"
+        const val EXTRA_MODEL_NAME = "model_name"
     }
 
     private val binder = LocalBinder()
@@ -74,6 +81,14 @@ class RecordingService : Service() {
             ACTION_SUMMARIZE -> {
                 val filePath = intent.getStringExtra(EXTRA_FILE_PATH)
                 if (filePath != null) summarize(filePath)
+            }
+            ACTION_DOWNLOAD_STT_MODEL -> {
+                val modelName = intent.getStringExtra(EXTRA_MODEL_NAME)
+                if (modelName != null) downloadSttModel(modelName)
+            }
+            ACTION_DOWNLOAD_LLM_MODEL -> {
+                val modelName = intent.getStringExtra(EXTRA_MODEL_NAME)
+                if (modelName != null) downloadLlmModel(modelName)
             }
         }
         return START_STICKY
@@ -171,6 +186,83 @@ class RecordingService : Service() {
         }
     }
 
+    fun downloadSttModel(modelName: String) {
+        val model = try {
+            SttModel.valueOf(modelName)
+        } catch (e: Exception) {
+            return
+        }
+
+        if (_serviceState.value.downloadingSttModel != null) return
+
+        _serviceState.value = _serviceState.value.copy(downloadingSttModel = model)
+        startForegroundWithType()
+
+        serviceScope.launch {
+            launch {
+                app.sttModelDownloader.downloadState.collect { state ->
+                    when (state) {
+                        is DownloadState.Downloading -> {
+                            updateNotification("STT 모델 다운로드 중... ${state.progress}%")
+                        }
+                        is DownloadState.Extracting -> {
+                            updateNotification("압축 해제 중...")
+                        }
+                        is DownloadState.Completed -> {
+                            updateNotification("다운로드 완료")
+                        }
+                        is DownloadState.Error -> {
+                            updateNotification("다운로드 실패")
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            app.sttModelDownloader.downloadModel(model)
+            
+            _serviceState.value = _serviceState.value.copy(downloadingSttModel = null)
+            stopForegroundIfIdle()
+        }
+    }
+
+    fun downloadLlmModel(modelName: String) {
+        val model = try {
+            LlmModel.valueOf(modelName)
+        } catch (e: Exception) {
+            return
+        }
+
+        if (_serviceState.value.downloadingLlmModel != null) return
+
+        _serviceState.value = _serviceState.value.copy(downloadingLlmModel = model)
+        startForegroundWithType()
+
+        serviceScope.launch {
+            launch {
+                app.llmModelDownloader.downloadState.collect { state ->
+                    when (state) {
+                        is LlmDownloadState.Downloading -> {
+                            updateNotification("LLM 모델 다운로드 중... ${state.progress}%")
+                        }
+                        is LlmDownloadState.Completed -> {
+                            updateNotification("다운로드 완료")
+                        }
+                        is LlmDownloadState.Error -> {
+                            updateNotification("다운로드 실패")
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            app.llmModelDownloader.downloadModel(model)
+            
+            _serviceState.value = _serviceState.value.copy(downloadingLlmModel = null)
+            stopForegroundIfIdle()
+        }
+    }
+
     private fun startForegroundWithType() {
         val notification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -184,7 +276,9 @@ class RecordingService : Service() {
         val state = _serviceState.value
         if (state.recordingState == RecordingState.IDLE &&
             state.transcribingFilePath == null &&
-            state.summarizingFilePath == null
+            state.summarizingFilePath == null &&
+            state.downloadingSttModel == null &&
+            state.downloadingLlmModel == null
         ) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -217,6 +311,8 @@ class RecordingService : Service() {
             state.recordingState == RecordingState.RECORDING -> "녹음 중..."
             state.transcribingFilePath != null -> "텍스트 변환 중..."
             state.summarizingFilePath != null -> "AI 요약 중..."
+            state.downloadingSttModel != null -> "STT 모델 다운로드 중..."
+            state.downloadingLlmModel != null -> "LLM 모델 다운로드 중..."
             else -> "대기 중"
         }
 
@@ -245,5 +341,7 @@ data class ServiceState(
     val recordingState: RecordingState = RecordingState.IDLE,
     val recordingDuration: Long = 0L,
     val transcribingFilePath: String? = null,
-    val summarizingFilePath: String? = null
+    val summarizingFilePath: String? = null,
+    val downloadingSttModel: SttModel? = null,
+    val downloadingLlmModel: LlmModel? = null
 )
