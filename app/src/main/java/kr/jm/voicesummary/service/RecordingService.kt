@@ -114,7 +114,7 @@ class RecordingService : Service() {
         val recordingDir = getExternalFilesDir(null) ?: filesDir
         currentRecordingFile = File(recordingDir, fileName)
 
-        startForegroundWithType()
+        startForegroundWithType(useMicrophone = true)
 
         serviceScope.launch {
             app.audioRecorder.startRecording(currentRecordingFile!!)
@@ -263,10 +263,15 @@ class RecordingService : Service() {
         }
     }
 
-    private fun startForegroundWithType() {
+    private fun startForegroundWithType(useMicrophone: Boolean = false) {
         val notification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            val type = if (useMicrophone) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            }
+            startForeground(NOTIFICATION_ID, notification, type)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
