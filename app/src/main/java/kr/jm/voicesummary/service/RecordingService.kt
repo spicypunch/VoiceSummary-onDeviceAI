@@ -127,17 +127,23 @@ class RecordingService : Service() {
     fun transcribe(filePath: String) {
         if (_serviceState.value.transcribingFilePath != null) return
 
+        // 모델이 없으면 STT 불가
+        if (!app.sttModelDownloader.isCurrentModelDownloaded()) {
+            return
+        }
+
         _serviceState.value = _serviceState.value.copy(transcribingFilePath = filePath)
         startForegroundWithType()
         updateNotification("텍스트 변환 중...")
 
         serviceScope.launch {
-            if (app.whisperTranscriber.initialize()) {
-                app.whisperTranscriber.transcribe(File(filePath))
+            if (app.sttTranscriber.initialize()) {
+                app.sttTranscriber.transcribe(File(filePath))
                     .onSuccess { text ->
                         app.recordingRepository.updateTranscription(filePath, text)
                     }
             }
+            
             _serviceState.value = _serviceState.value.copy(transcribingFilePath = null)
             stopForegroundIfIdle()
         }

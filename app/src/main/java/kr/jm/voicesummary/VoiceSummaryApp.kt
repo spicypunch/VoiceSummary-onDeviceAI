@@ -5,7 +5,8 @@ import androidx.room.Room
 import kr.jm.voicesummary.core.audio.AudioPlayer
 import kr.jm.voicesummary.core.audio.AudioRecorder
 import kr.jm.voicesummary.core.llm.LlmSummarizer
-import kr.jm.voicesummary.core.whisper.WhisperTranscriber
+import kr.jm.voicesummary.core.stt.SherpaModelDownloader
+import kr.jm.voicesummary.core.stt.SherpaTranscriber
 import kr.jm.voicesummary.data.local.AppDatabase
 import kr.jm.voicesummary.data.repository.RecordingRepositoryImpl
 import kr.jm.voicesummary.domain.repository.RecordingRepository
@@ -24,7 +25,10 @@ class VoiceSummaryApp : Application() {
     lateinit var audioPlayer: AudioPlayer
         private set
 
-    lateinit var whisperTranscriber: WhisperTranscriber
+    lateinit var sttTranscriber: SherpaTranscriber
+        private set
+
+    lateinit var sttModelDownloader: SherpaModelDownloader
         private set
 
     lateinit var llmSummarizer: LlmSummarizer
@@ -46,7 +50,8 @@ class VoiceSummaryApp : Application() {
 
         audioRecorder = AudioRecorder(this)
         audioPlayer = AudioPlayer()
-        whisperTranscriber = WhisperTranscriber(this)
+        sttModelDownloader = SherpaModelDownloader(this)
+        sttTranscriber = SherpaTranscriber(this, sttModelDownloader)
         llmSummarizer = LlmSummarizer(this)
     }
 }

@@ -74,7 +74,8 @@ class MainActivity : ComponentActivity() {
             RecordingListViewModel.Factory(
                 app.recordingRepository,
                 app.audioPlayer,
-                app.whisperTranscriber,
+                app.sttTranscriber,
+                app.sttModelDownloader,
                 app.llmSummarizer,
                 this
             )
@@ -125,6 +126,10 @@ class MainActivity : ComponentActivity() {
                             onExpandToggle = { listViewModel.onExpandToggle(it) },
                             onDeleteConfirm = { listViewModel.onDeleteConfirm() },
                             onDeleteCancel = { listViewModel.onDeleteCancel() },
+                            onDownloadSttModel = { listViewModel.onDownloadSttModel(it) },
+                            onShowModelSelector = { listViewModel.onShowModelSelector() },
+                            onDismissModelSelector = { listViewModel.onDismissModelSelector() },
+                            onSelectModel = { listViewModel.onSelectModel(it) },
                             modifier = Modifier.padding(innerPadding)
                         )
                     }

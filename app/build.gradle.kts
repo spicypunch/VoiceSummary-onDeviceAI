@@ -25,13 +25,6 @@ android {
         }
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -68,6 +61,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.mediapipe.llm)
+    implementation(files("libs/sherpa-onnx-1.12.20.aar"))
+    implementation(libs.commons.compress)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

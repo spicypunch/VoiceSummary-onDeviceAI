@@ -1,6 +1,8 @@
 package kr.jm.voicesummary.presentation.list
 
 import kr.jm.voicesummary.core.audio.PlaybackState
+import kr.jm.voicesummary.core.stt.DownloadState
+import kr.jm.voicesummary.core.stt.SttModel
 import kr.jm.voicesummary.domain.model.Recording
 
 data class RecordingListUiState(
@@ -13,5 +15,10 @@ data class RecordingListUiState(
     val summarizingFilePath: String? = null,
     val deleteTarget: Recording? = null,
     val expandedItems: Set<String> = emptySet(),
-    val isLlmAvailable: Boolean = false
+    val isLlmAvailable: Boolean = false,
+    val isSttModelDownloaded: Boolean = false,
+    val sttDownloadState: DownloadState = DownloadState.Idle,
+    val selectedSttModel: SttModel = SttModel.WHISPER_BASE,
+    val showModelSelector: Boolean = false,
+    val downloadedModels: Set<SttModel> = emptySet()
 )
