@@ -35,6 +35,8 @@
             android:name=".service.RecordingService"
             android:exported="false"
             android:foregroundServiceType="microphone|dataSync" />
+
+
     </application>
 
 </manifest>
