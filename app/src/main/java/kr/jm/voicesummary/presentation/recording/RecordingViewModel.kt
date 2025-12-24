@@ -10,12 +10,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kr.jm.voicesummary.core.audio.AudioRecorder
-import kr.jm.voicesummary.core.audio.RecordingState
+import kr.jm.voicesummary.domain.repository.AudioRepository
+import kr.jm.voicesummary.domain.repository.RecordingState
 import kr.jm.voicesummary.service.RecordingService
 
 class RecordingViewModel(
-    private val audioRecorder: AudioRecorder,
+    private val audioRepository: AudioRepository,
     private val context: Context
 ) : ViewModel() {
 
@@ -24,18 +24,18 @@ class RecordingViewModel(
 
     init {
         viewModelScope.launch {
-            audioRecorder.recordingState.collect { state ->
+            audioRepository.recordingState.collect { state ->
                 _uiState.update { it.copy(recordingState = state) }
             }
         }
         viewModelScope.launch {
-            audioRecorder.recordingDuration.collect { duration ->
+            audioRepository.recordingDuration.collect { duration ->
                 _uiState.update { it.copy(recordingDuration = duration) }
             }
         }
     }
 
-    fun hasPermission(): Boolean = audioRecorder.hasPermission()
+    fun hasPermission(): Boolean = audioRepository.hasRecordPermission()
 
     fun onRecordClick() {
         if (_uiState.value.recordingState == RecordingState.RECORDING) {
@@ -60,12 +60,12 @@ class RecordingViewModel(
     }
 
     class Factory(
-        private val audioRecorder: AudioRecorder,
+        private val audioRepository: AudioRepository,
         private val context: Context
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return RecordingViewModel(audioRecorder, context) as T
+            return RecordingViewModel(audioRepository, context) as T
         }
     }
 }

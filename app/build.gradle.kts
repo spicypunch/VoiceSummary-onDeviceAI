@@ -60,7 +60,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.mediapipe.llm)
     implementation(files("libs/sherpa-onnx-1.12.20.aar"))
     implementation(libs.commons.compress)
     testImplementation(libs.junit)

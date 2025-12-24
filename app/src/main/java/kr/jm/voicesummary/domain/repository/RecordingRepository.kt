@@ -8,7 +8,6 @@ interface RecordingRepository {
     suspend fun getRecording(filePath: String): Recording?
     suspend fun saveRecording(recording: Recording)
     suspend fun updateTranscription(filePath: String, transcription: String)
-    suspend fun updateSummary(filePath: String, summary: String)
     suspend fun deleteRecording(filePath: String)
     suspend fun syncFiles()
 }

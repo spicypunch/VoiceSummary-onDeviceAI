@@ -1,4 +1,4 @@
-package kr.jm.voicesummary.core.stt
+package kr.jm.voicesummary.domain.model
 
 enum class SttModel(
     val displayName: String,
