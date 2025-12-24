@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RecordingDao {
-
     @Query("SELECT * FROM recordings ORDER BY createdAt DESC")
     fun getAllRecordings(): Flow<List<RecordingEntity>>
 
@@ -20,9 +19,6 @@ interface RecordingDao {
 
     @Query("UPDATE recordings SET transcription = :transcription WHERE filePath = :filePath")
     suspend fun updateTranscription(filePath: String, transcription: String)
-
-    @Query("UPDATE recordings SET summary = :summary WHERE filePath = :filePath")
-    suspend fun updateSummary(filePath: String, summary: String)
 
     @Query("DELETE FROM recordings WHERE filePath = :filePath")
     suspend fun delete(filePath: String)

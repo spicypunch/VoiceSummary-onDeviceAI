@@ -1,6 +1,6 @@
 package kr.jm.voicesummary.presentation.recording
 
-import kr.jm.voicesummary.core.audio.RecordingState
+import kr.jm.voicesummary.domain.repository.RecordingState
 
 data class RecordingUiState(
     val recordingState: RecordingState = RecordingState.IDLE,

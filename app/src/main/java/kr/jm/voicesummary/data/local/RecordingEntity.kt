@@ -11,16 +11,14 @@ data class RecordingEntity(
     val fileName: String,
     val createdAt: Long,
     val fileSize: Long,
-    val transcription: String? = null,
-    val summary: String? = null
+    val transcription: String? = null
 ) {
     fun toDomain() = Recording(
         filePath = filePath,
         fileName = fileName,
         createdAt = createdAt,
         fileSize = fileSize,
-        transcription = transcription,
-        summary = summary
+        transcription = transcription
     )
 
     companion object {
@@ -29,8 +27,7 @@ data class RecordingEntity(
             fileName = recording.fileName,
             createdAt = recording.createdAt,
             fileSize = recording.fileSize,
-            transcription = recording.transcription,
-            summary = recording.summary
+            transcription = recording.transcription
         )
     }
 }

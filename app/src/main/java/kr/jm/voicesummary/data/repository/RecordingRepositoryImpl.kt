@@ -32,10 +32,6 @@ class RecordingRepositoryImpl(
         recordingDao.updateTranscription(filePath, transcription)
     }
 
-    override suspend fun updateSummary(filePath: String, summary: String) {
-        recordingDao.updateSummary(filePath, summary)
-    }
-
     override suspend fun deleteRecording(filePath: String) {
         File(filePath).delete()
         recordingDao.delete(filePath)

@@ -5,6 +5,5 @@ data class Recording(
     val fileName: String,
     val createdAt: Long,
     val fileSize: Long,
-    val transcription: String? = null,
-    val summary: String? = null
+    val transcription: String? = null
 )

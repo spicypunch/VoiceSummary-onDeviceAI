@@ -22,8 +22,10 @@ import kotlinx.coroutines.launch
 import kr.jm.voicesummary.MainActivity
 import kr.jm.voicesummary.R
 import kr.jm.voicesummary.VoiceSummaryApp
-import kr.jm.voicesummary.core.audio.RecordingState
 import kr.jm.voicesummary.domain.model.Recording
+import kr.jm.voicesummary.domain.model.SttModel
+import kr.jm.voicesummary.domain.repository.RecordingState
+import kr.jm.voicesummary.domain.repository.SttDownloadState
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -37,14 +39,15 @@ class RecordingService : Service() {
         const val ACTION_START_RECORDING = "START_RECORDING"
         const val ACTION_STOP_RECORDING = "STOP_RECORDING"
         const val ACTION_TRANSCRIBE = "TRANSCRIBE"
-        const val ACTION_SUMMARIZE = "SUMMARIZE"
+        const val ACTION_DOWNLOAD_STT_MODEL = "DOWNLOAD_STT_MODEL"
         const val EXTRA_FILE_PATH = "file_path"
+        const val EXTRA_MODEL_NAME = "model_name"
     }
 
     private val binder = LocalBinder()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    private val app by lazy { application as VoiceSummaryApp }
+    private val container by lazy { (application as VoiceSummaryApp).container }
 
     private var currentRecordingFile: File? = null
 
@@ -67,47 +70,40 @@ class RecordingService : Service() {
         when (intent?.action) {
             ACTION_START_RECORDING -> startRecording()
             ACTION_STOP_RECORDING -> stopRecording()
-            ACTION_TRANSCRIBE -> {
-                val filePath = intent.getStringExtra(EXTRA_FILE_PATH)
-                if (filePath != null) transcribe(filePath)
-            }
-            ACTION_SUMMARIZE -> {
-                val filePath = intent.getStringExtra(EXTRA_FILE_PATH)
-                if (filePath != null) summarize(filePath)
-            }
+            ACTION_TRANSCRIBE -> intent.getStringExtra(EXTRA_FILE_PATH)?.let { transcribe(it) }
+            ACTION_DOWNLOAD_STT_MODEL -> intent.getStringExtra(EXTRA_MODEL_NAME)?.let { downloadSttModel(it) }
         }
         return START_STICKY
     }
 
     private fun observeRecordingState() {
         serviceScope.launch {
-            app.audioRecorder.recordingState.collect { state ->
+            container.audioRepository.recordingState.collect { state ->
                 _serviceState.value = _serviceState.value.copy(recordingState = state)
                 updateNotification()
             }
         }
         serviceScope.launch {
-            app.audioRecorder.recordingDuration.collect { duration ->
+            container.audioRepository.recordingDuration.collect { duration ->
                 _serviceState.value = _serviceState.value.copy(recordingDuration = duration)
             }
         }
     }
 
-    fun startRecording() {
-        val fileName = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-            .format(Date()) + ".wav"
+    private fun startRecording() {
+        val fileName = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date()) + ".wav"
         val recordingDir = getExternalFilesDir(null) ?: filesDir
         currentRecordingFile = File(recordingDir, fileName)
 
-        startForegroundWithType()
+        startForegroundWithType(useMicrophone = true)
 
         serviceScope.launch {
-            app.audioRecorder.startRecording(currentRecordingFile!!)
+            container.audioRepository.startRecording(currentRecordingFile!!)
         }
     }
 
-    fun stopRecording() {
-        app.audioRecorder.stopRecording()
+    private fun stopRecording() {
+        container.audioRepository.stopRecording()
         currentRecordingFile?.let { file ->
             if (file.exists()) {
                 serviceScope.launch {
@@ -117,64 +113,64 @@ class RecordingService : Service() {
                         createdAt = System.currentTimeMillis(),
                         fileSize = file.length()
                     )
-                    app.recordingRepository.saveRecording(recording)
+                    container.recordingRepository.saveRecording(recording)
                 }
             }
         }
         stopForegroundIfIdle()
     }
 
-    fun transcribe(filePath: String) {
+    private fun transcribe(filePath: String) {
         if (_serviceState.value.transcribingFilePath != null) return
-
-        // 모델이 없으면 STT 불가
-        if (!app.sttModelDownloader.isCurrentModelDownloaded()) {
-            return
-        }
+        if (!container.sttRepository.isCurrentModelDownloaded()) return
 
         _serviceState.value = _serviceState.value.copy(transcribingFilePath = filePath)
         startForegroundWithType()
         updateNotification("텍스트 변환 중...")
 
         serviceScope.launch {
-            if (app.sttTranscriber.initialize()) {
-                app.sttTranscriber.transcribe(File(filePath))
+            if (container.sttRepository.initializeTranscriber()) {
+                container.sttRepository.transcribe(File(filePath))
                     .onSuccess { text ->
-                        app.recordingRepository.updateTranscription(filePath, text)
+                        container.recordingRepository.updateTranscription(filePath, text)
                     }
             }
-            
             _serviceState.value = _serviceState.value.copy(transcribingFilePath = null)
             stopForegroundIfIdle()
         }
     }
 
-    fun summarize(filePath: String) {
-        if (_serviceState.value.summarizingFilePath != null) return
+    private fun downloadSttModel(modelName: String) {
+        val model = try { SttModel.valueOf(modelName) } catch (e: Exception) { return }
+        if (_serviceState.value.downloadingSttModel != null) return
+
+        _serviceState.value = _serviceState.value.copy(downloadingSttModel = model)
+        startForegroundWithType()
 
         serviceScope.launch {
-            val recording = app.recordingRepository.getRecording(filePath)
-            if (recording?.transcription.isNullOrBlank()) return@launch
-
-            _serviceState.value = _serviceState.value.copy(summarizingFilePath = filePath)
-            startForegroundWithType()
-            updateNotification("AI 요약 중...")
-
-            if (app.llmSummarizer.initialize()) {
-                app.llmSummarizer.summarize(recording!!.transcription!!)
-                    .onSuccess { summary ->
-                        app.recordingRepository.updateSummary(filePath, summary)
+            launch {
+                container.sttRepository.downloadState.collect { state ->
+                    when (state) {
+                        is SttDownloadState.Downloading -> updateNotification("STT 모델 다운로드 중... ${state.progress}%")
+                        is SttDownloadState.Extracting -> updateNotification("압축 해제 중...")
+                        is SttDownloadState.Completed -> updateNotification("다운로드 완료")
+                        is SttDownloadState.Error -> updateNotification("다운로드 실패")
+                        else -> {}
                     }
+                }
             }
-            _serviceState.value = _serviceState.value.copy(summarizingFilePath = null)
+            container.sttRepository.downloadModel(model)
+            _serviceState.value = _serviceState.value.copy(downloadingSttModel = null)
             stopForegroundIfIdle()
         }
     }
 
-    private fun startForegroundWithType() {
+    private fun startForegroundWithType(useMicrophone: Boolean = false) {
         val notification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            val type = if (useMicrophone) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            else ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            startForeground(NOTIFICATION_ID, notification, type)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -184,7 +180,7 @@ class RecordingService : Service() {
         val state = _serviceState.value
         if (state.recordingState == RecordingState.IDLE &&
             state.transcribingFilePath == null &&
-            state.summarizingFilePath == null
+            state.downloadingSttModel == null
         ) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -193,30 +189,22 @@ class RecordingService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "녹음 서비스",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "녹음 및 AI 처리 상태를 표시합니다"
+            val channel = NotificationChannel(CHANNEL_ID, "녹음 서비스", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "녹음 및 STT 처리 상태를 표시합니다"
             }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 
     private fun createNotification(contentText: String? = null): Notification {
         val intent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val state = _serviceState.value
         val text = contentText ?: when {
             state.recordingState == RecordingState.RECORDING -> "녹음 중..."
             state.transcribingFilePath != null -> "텍스트 변환 중..."
-            state.summarizingFilePath != null -> "AI 요약 중..."
+            state.downloadingSttModel != null -> "STT 모델 다운로드 중..."
             else -> "대기 중"
         }
 
@@ -230,9 +218,7 @@ class RecordingService : Service() {
     }
 
     private fun updateNotification(contentText: String? = null) {
-        val notification = createNotification(contentText)
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIFICATION_ID, notification)
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, createNotification(contentText))
     }
 
     override fun onDestroy() {
@@ -245,5 +231,5 @@ data class ServiceState(
     val recordingState: RecordingState = RecordingState.IDLE,
     val recordingDuration: Long = 0L,
     val transcribingFilePath: String? = null,
-    val summarizingFilePath: String? = null
+    val downloadingSttModel: SttModel? = null
 )

@@ -48,35 +48,29 @@ class MainActivity : ComponentActivity() {
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* 알림 권한은 선택사항 */ }
+    ) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Android 13+ 알림 권한 요청
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        val app = application as VoiceSummaryApp
+        val container = (application as VoiceSummaryApp).container
 
         recordingViewModel = ViewModelProvider(
             this,
-            RecordingViewModel.Factory(
-                app.audioRecorder,
-                this
-            )
+            RecordingViewModel.Factory(container.audioRepository, this)
         )[RecordingViewModel::class.java]
 
         listViewModel = ViewModelProvider(
             this,
             RecordingListViewModel.Factory(
-                app.recordingRepository,
-                app.audioPlayer,
-                app.sttTranscriber,
-                app.sttModelDownloader,
-                app.llmSummarizer,
+                container.recordingRepository,
+                container.audioRepository,
+                container.sttRepository,
                 this
             )
         )[RecordingListViewModel::class.java]
@@ -111,9 +105,7 @@ class MainActivity : ComponentActivity() {
                             uiState = recordingUiState,
                             hasPermission = recordingViewModel.hasPermission(),
                             onRecordClick = { recordingViewModel.onRecordClick() },
-                            onRequestPermission = {
-                                recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            },
+                            onRequestPermission = { recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                             modifier = Modifier.padding(innerPadding)
                         )
                         1 -> RecordingListScreen(
@@ -122,14 +114,13 @@ class MainActivity : ComponentActivity() {
                             onLongClick = { listViewModel.onLongClick(it) },
                             onSeek = { listViewModel.onSeek(it) },
                             onTranscribeClick = { listViewModel.onTranscribeClick(it) },
-                            onSummarizeClick = { listViewModel.onSummarizeClick(it) },
                             onExpandToggle = { listViewModel.onExpandToggle(it) },
                             onDeleteConfirm = { listViewModel.onDeleteConfirm() },
                             onDeleteCancel = { listViewModel.onDeleteCancel() },
                             onDownloadSttModel = { listViewModel.onDownloadSttModel(it) },
-                            onShowModelSelector = { listViewModel.onShowModelSelector() },
-                            onDismissModelSelector = { listViewModel.onDismissModelSelector() },
-                            onSelectModel = { listViewModel.onSelectModel(it) },
+                            onShowSttModelSelector = { listViewModel.onShowSttModelSelector() },
+                            onDismissSttModelSelector = { listViewModel.onDismissSttModelSelector() },
+                            onSelectSttModel = { listViewModel.onSelectSttModel(it) },
                             modifier = Modifier.padding(innerPadding)
                         )
                     }

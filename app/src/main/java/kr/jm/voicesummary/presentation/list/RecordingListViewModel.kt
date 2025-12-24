@@ -10,23 +10,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kr.jm.voicesummary.core.audio.AudioPlayer
-import kr.jm.voicesummary.core.llm.LlmSummarizer
-import kr.jm.voicesummary.core.stt.DownloadState
-import kr.jm.voicesummary.core.stt.SherpaModelDownloader
-import kr.jm.voicesummary.core.stt.SherpaTranscriber
-import kr.jm.voicesummary.core.stt.SttModel
 import kr.jm.voicesummary.domain.model.Recording
+import kr.jm.voicesummary.domain.model.SttModel
+import kr.jm.voicesummary.domain.repository.AudioRepository
 import kr.jm.voicesummary.domain.repository.RecordingRepository
+import kr.jm.voicesummary.domain.repository.SttDownloadState
+import kr.jm.voicesummary.domain.repository.SttRepository
+import kr.jm.voicesummary.domain.repository.SttState
 import kr.jm.voicesummary.service.RecordingService
 import java.io.File
 
 class RecordingListViewModel(
-    private val repository: RecordingRepository,
-    private val audioPlayer: AudioPlayer,
-    private val sttTranscriber: SherpaTranscriber,
-    private val sttModelDownloader: SherpaModelDownloader,
-    private val llmSummarizer: LlmSummarizer,
+    private val recordingRepository: RecordingRepository,
+    private val audioRepository: AudioRepository,
+    private val sttRepository: SttRepository,
     private val context: Context
 ) : ViewModel() {
 
@@ -34,94 +31,87 @@ class RecordingListViewModel(
     val uiState: StateFlow<RecordingListUiState> = _uiState.asStateFlow()
 
     init {
+        initRecordingObservers()
+        initSttObservers()
+    }
+
+    private fun initRecordingObservers() {
+        viewModelScope.launch { recordingRepository.syncFiles() }
         viewModelScope.launch {
-            repository.syncFiles()
-        }
-        viewModelScope.launch {
-            repository.getAllRecordings().collect { recordings ->
+            recordingRepository.getAllRecordings().collect { recordings ->
                 _uiState.update { it.copy(recordings = recordings) }
             }
         }
         viewModelScope.launch {
-            audioPlayer.playbackState.collect { state ->
+            audioRepository.playbackState.collect { state ->
                 _uiState.update { it.copy(playbackState = state) }
             }
         }
         viewModelScope.launch {
-            audioPlayer.currentFile.collect { file ->
+            audioRepository.currentPlayingFile.collect { file ->
                 _uiState.update { it.copy(currentPlayingFilePath = file?.absolutePath) }
             }
         }
         viewModelScope.launch {
-            audioPlayer.currentPosition.collect { position ->
+            audioRepository.currentPosition.collect { position ->
                 _uiState.update { it.copy(currentPosition = position) }
             }
         }
         viewModelScope.launch {
-            audioPlayer.duration.collect { duration ->
+            audioRepository.duration.collect { duration ->
                 _uiState.update { it.copy(duration = duration) }
             }
         }
+    }
+
+    private fun initSttObservers() {
         viewModelScope.launch {
-            sttTranscriber.state.collect { state ->
+            sttRepository.transcriptionState.collect { state ->
                 when (state) {
-                    kr.jm.voicesummary.core.stt.SttState.READY,
-                    kr.jm.voicesummary.core.stt.SttState.ERROR -> {
+                    SttState.READY, SttState.ERROR -> {
                         _uiState.update { it.copy(transcribingFilePath = null) }
                     }
-                    else -> { /* LOADING, TRANSCRIBING 등은 유지 */ }
+                    else -> {}
                 }
             }
         }
         viewModelScope.launch {
-            sttModelDownloader.downloadState.collect { state ->
-                _uiState.update { 
+            sttRepository.downloadState.collect { state ->
+                _uiState.update {
                     it.copy(
                         sttDownloadState = state,
-                        isSttModelDownloaded = state is DownloadState.Completed || sttModelDownloader.isCurrentModelDownloaded(),
-                        downloadedModels = sttModelDownloader.getDownloadedModels().toSet()
+                        isSttModelDownloaded = state is SttDownloadState.Completed || sttRepository.isCurrentModelDownloaded(),
+                        downloadedSttModels = sttRepository.getDownloadedModels().toSet()
                     )
                 }
             }
         }
-        _uiState.update { 
-            it.copy(
-                isSttModelDownloaded = sttModelDownloader.isCurrentModelDownloaded(),
-                selectedSttModel = sttModelDownloader.getSelectedModel(),
-                downloadedModels = sttModelDownloader.getDownloadedModels().toSet()
-            )
-        }
         viewModelScope.launch {
-            sttModelDownloader.selectedModel.collect { model ->
-                _uiState.update { 
+            sttRepository.selectedModel.collect { model ->
+                _uiState.update {
                     it.copy(
                         selectedSttModel = model,
-                        isSttModelDownloaded = sttModelDownloader.isModelDownloaded(model),
-                        downloadedModels = sttModelDownloader.getDownloadedModels().toSet()
+                        isSttModelDownloaded = sttRepository.isModelDownloaded(model),
+                        downloadedSttModels = sttRepository.getDownloadedModels().toSet()
                     )
                 }
             }
         }
-        viewModelScope.launch {
-            llmSummarizer.state.collect { state ->
-                when (state) {
-                    kr.jm.voicesummary.core.llm.LlmState.READY,
-                    kr.jm.voicesummary.core.llm.LlmState.ERROR -> {
-                        _uiState.update { it.copy(summarizingFilePath = null) }
-                    }
-                    else -> { /* LOADING, SUMMARIZING 등은 유지 */ }
-                }
-            }
+        _uiState.update {
+            it.copy(
+                isSttModelDownloaded = sttRepository.isCurrentModelDownloaded(),
+                selectedSttModel = sttRepository.getSelectedModel(),
+                downloadedSttModels = sttRepository.getDownloadedModels().toSet()
+            )
         }
-        _uiState.update { it.copy(isLlmAvailable = llmSummarizer.isModelDownloaded()) }
     }
 
     fun onPlayClick(recording: Recording) {
-        audioPlayer.play(File(recording.filePath))
+        audioRepository.play(File(recording.filePath))
     }
 
     fun onSeek(position: Int) {
-        audioPlayer.seekTo(position)
+        audioRepository.seekTo(position)
     }
 
     fun onLongClick(recording: Recording) {
@@ -135,8 +125,8 @@ class RecordingListViewModel(
     fun onDeleteConfirm() {
         val recording = _uiState.value.deleteTarget ?: return
         viewModelScope.launch {
-            audioPlayer.stop()
-            repository.deleteRecording(recording.filePath)
+            audioRepository.stopPlayback()
+            recordingRepository.deleteRecording(recording.filePath)
             _uiState.update { it.copy(deleteTarget = null) }
         }
     }
@@ -154,45 +144,31 @@ class RecordingListViewModel(
     }
 
     fun onDownloadSttModel(model: SttModel) {
-        viewModelScope.launch {
-            sttModelDownloader.downloadModel(model)
-            if (sttModelDownloader.isModelDownloaded(model)) {
-                sttTranscriber.release()
-            }
-        }
-    }
-
-    fun onShowModelSelector() {
-        _uiState.update { it.copy(showModelSelector = true) }
-    }
-
-    fun onDismissModelSelector() {
-        _uiState.update { it.copy(showModelSelector = false) }
-    }
-
-    fun onSelectModel(model: SttModel) {
-        sttModelDownloader.setSelectedModel(model)
-        _uiState.update { 
-            it.copy(
-                showModelSelector = false,
-                selectedSttModel = model,
-                isSttModelDownloaded = sttModelDownloader.isModelDownloaded(model)
-            )
-        }
-        // 모델 변경 시 transcriber 재초기화 필요
-        sttTranscriber.release()
-    }
-
-    fun onSummarizeClick(recording: Recording) {
-        if (_uiState.value.summarizingFilePath != null) return
-        if (recording.transcription.isNullOrBlank()) return
-
-        _uiState.update { it.copy(summarizingFilePath = recording.filePath) }
         val intent = Intent(context, RecordingService::class.java).apply {
-            action = RecordingService.ACTION_SUMMARIZE
-            putExtra(RecordingService.EXTRA_FILE_PATH, recording.filePath)
+            action = RecordingService.ACTION_DOWNLOAD_STT_MODEL
+            putExtra(RecordingService.EXTRA_MODEL_NAME, model.name)
         }
         context.startForegroundService(intent)
+    }
+
+    fun onShowSttModelSelector() {
+        _uiState.update { it.copy(showSttModelSelector = true) }
+    }
+
+    fun onDismissSttModelSelector() {
+        _uiState.update { it.copy(showSttModelSelector = false) }
+    }
+
+    fun onSelectSttModel(model: SttModel) {
+        sttRepository.setSelectedModel(model)
+        _uiState.update {
+            it.copy(
+                showSttModelSelector = false,
+                selectedSttModel = model,
+                isSttModelDownloaded = sttRepository.isModelDownloaded(model)
+            )
+        }
+        sttRepository.releaseTranscriber()
     }
 
     fun onExpandToggle(filePath: String) {
@@ -207,16 +183,14 @@ class RecordingListViewModel(
     }
 
     class Factory(
-        private val repository: RecordingRepository,
-        private val audioPlayer: AudioPlayer,
-        private val sttTranscriber: SherpaTranscriber,
-        private val sttModelDownloader: SherpaModelDownloader,
-        private val llmSummarizer: LlmSummarizer,
+        private val recordingRepository: RecordingRepository,
+        private val audioRepository: AudioRepository,
+        private val sttRepository: SttRepository,
         private val context: Context
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return RecordingListViewModel(repository, audioPlayer, sttTranscriber, sttModelDownloader, llmSummarizer, context) as T
+            return RecordingListViewModel(recordingRepository, audioRepository, sttRepository, context) as T
         }
     }
 }

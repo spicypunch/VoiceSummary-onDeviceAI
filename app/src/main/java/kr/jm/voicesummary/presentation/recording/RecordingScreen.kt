@@ -18,7 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kr.jm.voicesummary.core.audio.RecordingState
+import kr.jm.voicesummary.domain.repository.RecordingState
 
 @Composable
 fun RecordingScreen(
@@ -29,9 +29,7 @@ fun RecordingScreen(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(32.dp),
+        modifier = modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -52,11 +50,7 @@ fun RecordingScreen(
                 if (uiState.recordingState == RecordingState.RECORDING) {
                     onRecordClick()
                 } else {
-                    if (hasPermission) {
-                        onRecordClick()
-                    } else {
-                        onRequestPermission()
-                    }
+                    if (hasPermission) onRecordClick() else onRequestPermission()
                 }
             },
             modifier = Modifier.size(120.dp),
