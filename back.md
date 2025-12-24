@@ -212,3 +212,38 @@ implementation(libs.androidx.compose.material.icons.extended)
 3. UI/UX 개선
    - 녹음 파형 시각화
    - STT 실시간 스트리밍 (현재는 녹음 완료 후 처리)
+
+---
+
+## 8단계: 설정 화면 + OSS 라이선스 (완료)
+
+### 구현 내용
+- 설정 화면 추가 (`presentation/settings/SettingsScreen.kt`)
+- 목록 탭 우측 상단에 설정 아이콘 추가
+- Google OSS Licenses 플러그인 연동
+- 오픈소스 라이선스 목록 표시 기능
+
+### 설정 화면 구성
+- 오픈소스 라이선스: 사용된 라이브러리 정보 표시
+- 앱 버전: 1.0.0
+
+### 추가된 의존성
+```kotlin
+// OSS Licenses
+id("com.google.android.gms.oss-licenses-plugin") // 플러그인
+implementation("com.google.android.gms:play-services-oss-licenses:17.1.0")
+implementation("androidx.appcompat:appcompat:1.7.0") // OssLicensesMenuActivity용
+```
+
+### AndroidManifest.xml 설정
+- OssLicensesMenuActivity에 AppCompat 테마 적용 (Theme.AppCompat.Light.DarkActionBar)
+- OssLicensesActivity에도 동일 테마 적용
+
+### 파일 구조
+```
+presentation/
+├── settings/
+│   └── SettingsScreen.kt    # 설정 화면 (TopAppBar + 뒤로가기)
+└── list/
+    └── RecordingListScreen.kt  # 상단에 설정 아이콘 추가
+```
