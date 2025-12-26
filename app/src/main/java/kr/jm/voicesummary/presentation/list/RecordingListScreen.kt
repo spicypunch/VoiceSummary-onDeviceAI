@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -75,6 +76,8 @@ fun RecordingListScreen(
     onDismissSttModelSelector: () -> Unit,
     onSelectSttModel: (SttModel) -> Unit,
     onSettingsClick: () -> Unit,
+    onDismissPremiumDialog: () -> Unit,
+    onPurchasePremium: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     uiState.deleteTarget?.let { recording ->
@@ -97,8 +100,16 @@ fun RecordingListScreen(
         SttModelSelectorDialog(
             selectedModel = uiState.selectedSttModel,
             downloadedModels = uiState.downloadedSttModels,
-            onSelectModel = { onSelectSttModel(it); onDismissSttModelSelector() },
+            isPremium = uiState.isPremium,
+            onSelectModel = { onSelectSttModel(it) },
             onDismiss = onDismissSttModelSelector
+        )
+    }
+
+    if (uiState.showPremiumDialog) {
+        PremiumDialog(
+            onDismiss = onDismissPremiumDialog,
+            onPurchase = onPurchasePremium
         )
     }
 
@@ -243,6 +254,7 @@ private fun SttModelBanner(
 private fun SttModelSelectorDialog(
     selectedModel: SttModel,
     downloadedModels: Set<SttModel>,
+    isPremium: Boolean,
     onSelectModel: (SttModel) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -254,6 +266,7 @@ private fun SttModelSelectorDialog(
                 SttModel.entries.forEach { model ->
                     val isDownloaded = model in downloadedModels
                     val isSelected = model == selectedModel
+                    val isLocked = !model.isFree && !isPremium
                     Card(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                             .combinedClickable(onClick = { onSelectModel(model) }),
@@ -268,7 +281,18 @@ private fun SttModelSelectorDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(model.displayName, style = MaterialTheme.typography.titleSmall)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(model.displayName, style = MaterialTheme.typography.titleSmall)
+                                    if (isLocked) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            Icons.Default.Lock,
+                                            contentDescription = "프리미엄",
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     if (isDownloaded) {
                                         Text("다운됨", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -284,6 +308,36 @@ private fun SttModelSelectorDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } }
+    )
+}
+
+@Composable
+private fun PremiumDialog(
+    onDismiss: () -> Unit,
+    onPurchase: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("프리미엄으로 업그레이드") },
+        text = {
+            Column {
+                Text("프리미엄을 구매하면 다음 기능을 사용할 수 있습니다:")
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("• Whisper Base - 빠름, 정확도 중간")
+                Text("• Whisper Small - 보통, 정확도 높음")
+                Text("• Whisper Medium - 느림, 정확도 매우 높음")
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("더 정확한 음성 인식을 경험해보세요!")
+            }
+        },
+        confirmButton = {
+            Button(onClick = onPurchase) {
+                Text("구매하기")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        }
     )
 }
 

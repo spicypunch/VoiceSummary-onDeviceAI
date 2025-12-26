@@ -1,5 +1,6 @@
 package kr.jm.voicesummary.presentation.list
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
@@ -13,6 +14,7 @@ import kotlinx.coroutines.launch
 import kr.jm.voicesummary.domain.model.Recording
 import kr.jm.voicesummary.domain.model.SttModel
 import kr.jm.voicesummary.domain.repository.AudioRepository
+import kr.jm.voicesummary.domain.repository.BillingRepository
 import kr.jm.voicesummary.domain.repository.RecordingRepository
 import kr.jm.voicesummary.domain.repository.SttDownloadState
 import kr.jm.voicesummary.domain.repository.SttRepository
@@ -24,6 +26,7 @@ class RecordingListViewModel(
     private val recordingRepository: RecordingRepository,
     private val audioRepository: AudioRepository,
     private val sttRepository: SttRepository,
+    private val billingRepository: BillingRepository,
     private val context: Context
 ) : ViewModel() {
 
@@ -33,6 +36,7 @@ class RecordingListViewModel(
     init {
         initRecordingObservers()
         initSttObservers()
+        initBillingObservers()
     }
 
     private fun initRecordingObservers() {
@@ -106,6 +110,15 @@ class RecordingListViewModel(
         }
     }
 
+    private fun initBillingObservers() {
+        billingRepository.startConnection()
+        viewModelScope.launch {
+            billingRepository.isPremium.collect { isPremium ->
+                _uiState.update { it.copy(isPremium = isPremium) }
+            }
+        }
+    }
+
     fun onPlayClick(recording: Recording) {
         audioRepository.play(File(recording.filePath))
     }
@@ -160,6 +173,11 @@ class RecordingListViewModel(
     }
 
     fun onSelectSttModel(model: SttModel) {
+        if (!model.isFree && !_uiState.value.isPremium) {
+            _uiState.update { it.copy(showPremiumDialog = true, showSttModelSelector = false) }
+            return
+        }
+
         sttRepository.setSelectedModel(model)
         _uiState.update {
             it.copy(
@@ -169,6 +187,19 @@ class RecordingListViewModel(
             )
         }
         sttRepository.releaseTranscriber()
+    }
+
+    fun onShowPremiumDialog() {
+        _uiState.update { it.copy(showPremiumDialog = true) }
+    }
+
+    fun onDismissPremiumDialog() {
+        _uiState.update { it.copy(showPremiumDialog = false) }
+    }
+
+    fun onPurchasePremium(activityProvider: () -> Activity) {
+        billingRepository.launchPurchaseFlow(activityProvider)
+        _uiState.update { it.copy(showPremiumDialog = false) }
     }
 
     fun onExpandToggle(filePath: String) {
@@ -182,15 +213,21 @@ class RecordingListViewModel(
         }
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        billingRepository.endConnection()
+    }
+
     class Factory(
         private val recordingRepository: RecordingRepository,
         private val audioRepository: AudioRepository,
         private val sttRepository: SttRepository,
+        private val billingRepository: BillingRepository,
         private val context: Context
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return RecordingListViewModel(recordingRepository, audioRepository, sttRepository, context) as T
+            return RecordingListViewModel(recordingRepository, audioRepository, sttRepository, billingRepository, context) as T
         }
     }
 }
