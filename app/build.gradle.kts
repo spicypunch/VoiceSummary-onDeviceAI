@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "kr.jm.voicesummary"
-        minSdk = 24
+        minSdk = 29
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(files("libs/sherpa-onnx-1.12.20.aar"))
     implementation(libs.commons.compress)
+    implementation(libs.billing.ktx)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

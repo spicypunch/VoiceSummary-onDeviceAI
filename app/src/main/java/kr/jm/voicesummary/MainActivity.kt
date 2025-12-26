@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
                 container.recordingRepository,
                 container.audioRepository,
                 container.sttRepository,
+                container.billingRepository,
                 this
             )
         )[RecordingListViewModel::class.java]
@@ -130,6 +131,8 @@ class MainActivity : ComponentActivity() {
                                 onDismissSttModelSelector = { listViewModel.onDismissSttModelSelector() },
                                 onSelectSttModel = { listViewModel.onSelectSttModel(it) },
                                 onSettingsClick = { showSettings = true },
+                                onDismissPremiumDialog = { listViewModel.onDismissPremiumDialog() },
+                                onPurchasePremium = { listViewModel.onPurchasePremium { this@MainActivity } },
                                 modifier = Modifier.padding(innerPadding)
                             )
                         }

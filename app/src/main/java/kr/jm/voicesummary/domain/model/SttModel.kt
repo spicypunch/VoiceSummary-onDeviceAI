@@ -8,7 +8,8 @@ enum class SttModel(
     val encoderFile: String,
     val decoderFile: String,
     val tokensFile: String,
-    val sizeDescription: String
+    val sizeDescription: String,
+    val isFree: Boolean
 ) {
     WHISPER_TINY(
         displayName = "Whisper Tiny",
@@ -18,7 +19,8 @@ enum class SttModel(
         encoderFile = "tiny-encoder.int8.onnx",
         decoderFile = "tiny-decoder.int8.onnx",
         tokensFile = "tiny-tokens.txt",
-        sizeDescription = "~40MB"
+        sizeDescription = "~40MB",
+        isFree = true
     ),
     WHISPER_BASE(
         displayName = "Whisper Base",
@@ -28,7 +30,8 @@ enum class SttModel(
         encoderFile = "base-encoder.int8.onnx",
         decoderFile = "base-decoder.int8.onnx",
         tokensFile = "base-tokens.txt",
-        sizeDescription = "~75MB"
+        sizeDescription = "~75MB",
+        isFree = false
     ),
     WHISPER_SMALL(
         displayName = "Whisper Small",
@@ -38,7 +41,8 @@ enum class SttModel(
         encoderFile = "small-encoder.int8.onnx",
         decoderFile = "small-decoder.int8.onnx",
         tokensFile = "small-tokens.txt",
-        sizeDescription = "~250MB"
+        sizeDescription = "~250MB",
+        isFree = false
     ),
     WHISPER_MEDIUM(
         displayName = "Whisper Medium",
@@ -48,6 +52,7 @@ enum class SttModel(
         encoderFile = "medium-encoder.int8.onnx",
         decoderFile = "medium-decoder.int8.onnx",
         tokensFile = "medium-tokens.txt",
-        sizeDescription = "~750MB"
+        sizeDescription = "~750MB",
+        isFree = false
     )
 }

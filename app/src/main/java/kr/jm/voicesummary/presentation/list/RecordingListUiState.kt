@@ -16,7 +16,9 @@ data class RecordingListUiState(
     val expandedItems: Set<String> = emptySet(),
     val isSttModelDownloaded: Boolean = false,
     val sttDownloadState: SttDownloadState = SttDownloadState.Idle,
-    val selectedSttModel: SttModel = SttModel.WHISPER_BASE,
+    val selectedSttModel: SttModel = SttModel.WHISPER_TINY,
     val showSttModelSelector: Boolean = false,
-    val downloadedSttModels: Set<SttModel> = emptySet()
+    val downloadedSttModels: Set<SttModel> = emptySet(),
+    val isPremium: Boolean = false,
+    val showPremiumDialog: Boolean = false
 )
